@@ -36,16 +36,13 @@ export default function Home() {
             🚩 문제: 슈뢰딩거의 팀원
           </h2>
           <p className="text-lg leading-7 text-zinc-600 dark:text-zinc-400 max-w-2xl">
-            사이드 프로젝트나 스터디 팀원 모집 시, 우리는 검증되지 않은 정보로 인한 불확실성에 시달립니다.
+            사이드 프로젝트 팀원 모집 시 불확실성에 시달립니다. 이력서와 달리 코드는 거짓말하지 않지만, 일일이 확인하긴 어렵습니다.
           </p>
           <ul className="list-disc list-inside text-lg leading-7 text-zinc-600 dark:text-zinc-400 space-y-2">
             <li>"저 리액트 좀 해요" (Hello World만 찍어봄)</li>
             <li>"열정 있습니다!" (3일 뒤 연락 두절)</li>
             <li>"소통 원활합니다" (코드 리뷰 달면 싸우자고 덤빔)</li>
           </ul>
-          <p className="text-lg leading-7 text-zinc-600 dark:text-zinc-400 max-w-2xl">
-            자소서는 소설이 될 수 있지만, 커밋 로그와 코드는 진실을 말합니다. 하지만 이를 일일이 확인하기는 어렵습니다.
-          </p>
         </section>
 
         {/* Solution Section */}
@@ -54,8 +51,7 @@ export default function Home() {
             💡 해결책: 데이터 기반 개발자 전투력 측정기
           </h2>
           <p className="text-lg leading-7 text-zinc-600 dark:text-zinc-400 max-w-2xl">
-            CABO는 GitHub URL만으로 AI가 개발자의 성실성, 코드 품질, 협업 스타일을 분석해 '객관적인 개발자 리포트'를 제공합니다.
-            '까보지 않고는 모르는' 개발자의 실제를 투명하게 보여줍니다.
+            CABO는 GitHub URL로 AI가 개발자의 성실성, 코드 품질, 협업 스타일을 분석, '객관적인 개발자 리포트'를 제공하여 숨겨진 실체를 보여줍니다.
           </p>
 
           <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 w-full mt-8">
