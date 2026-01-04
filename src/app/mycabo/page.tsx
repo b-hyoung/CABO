@@ -136,7 +136,11 @@ export default function MyCaboPage() {
 
           <div className="mt-6">
             {activeTab === 'activity' && (
-              <ActivityAnalysisTab developer={developer} isTooltipVisible={isTooltipVisible} setIsTooltipVisible={setIsTooltipVisible} method={method} />
+              <div className="space-y-10">
+                <ActivityAnalysisTab developer={developer} isTooltipVisible={isTooltipVisible} setIsTooltipVisible={setIsTooltipVisible} method={method} />
+                <AdditionalStats stats={developer.stats} />
+                <Badges developer={developer} />
+              </div>
             )}
             {activeTab === 'quality' && (
               <CodeQualityTab developer={developer} />
@@ -146,10 +150,6 @@ export default function MyCaboPage() {
             )}
           </div>
         </section>
-
-        <AdditionalStats stats={developer.stats} />
-
-        <Badges developer={developer} />
 
         <footer className="w-full text-center mt-auto pt-8 border-t border-zinc-200 dark:border-zinc-700">
           <p className="text-md text-zinc-500 dark:text-zinc-400">
