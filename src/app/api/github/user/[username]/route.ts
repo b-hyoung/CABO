@@ -138,8 +138,8 @@ async function analyzeUserActivity(username: string, githubPat: string) {
     }
 
     const dayNames = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
-    const mainActivityDay = `주로 ${dayNames[commitsByDay.indexOf(Math.max(...commitsByDay))]}`;
-    const mainActivityTime = `주로 ${commitsByHour.indexOf(Math.max(...commitsByHour))}시`;
+    const mainActivityDay = `${dayNames[commitsByDay.indexOf(Math.max(...commitsByDay))]}`;
+    const mainActivityTime = `${commitsByHour.indexOf(Math.max(...commitsByHour))}시`;
     const commitFrequency = `주 평균 ${Math.round(totalCommitsInPeriod / 13)}회`;
 
     const finalResult = { 
