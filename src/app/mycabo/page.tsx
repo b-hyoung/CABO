@@ -143,7 +143,7 @@ export default function MyCaboPage() {
               </div>
             )}
             {activeTab === 'quality' && (
-              <CodeQualityTab developer={developer} />
+              <CodeQualityTab username={username} method={method} />
             )}
             {activeTab === 'communication' && (
               <CollaborationStyleTab developer={developer} />

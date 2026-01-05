@@ -1,3 +1,64 @@
+export interface QualityScore {
+  subject: string;
+  score: number;
+  fullMark: number;
+}
+
+export interface CodeSmell {
+  type: string;
+  description: string;
+  severity: 'Major' | 'Minor';
+}
+
+export interface DetailedMetrics {
+  totalCommits: number;
+
+  // Meaningfulness
+  meaninglessCommitRatio: number;
+  meaninglessCommitsCount: number;
+
+  // Information Density
+  avgMessageLength: number;
+  medianMessageLength: number; // Added as per spec
+  shortMessageRatio: number;
+  shortCommitsCount: number;
+
+  // Structure
+  structuredCommitRatio: number;
+  structuredCommitsCount: number;
+
+  // Commit Size Hygiene
+  totalLinesChangedMedian: number;
+  giantCommitRatio: number;
+  giantCommitsCount: number;
+
+  // Blast Radius
+  filesChangedCountMedian: number;
+  manyFilesCommitRatio: number;
+  manyFilesCommitsCount: number;
+
+  // Rhythm
+  activityWeekCoverageRatio: number;
+  activeWeeksCount: number;
+  analysisPeriodWeeks: number;
+  weeklyVolatility: number;
+
+  // Revert/Hotfix Signals
+  revertCommitRatio: number;
+  revertCommitsCount: number;
+  hotfixCommitRatio: number;
+  hotfixCommitsCount: number;
+}
+
+export interface CodeQualityData {
+  overallRating: 'Clean' | 'Mixed' | 'Messy';
+  confidence: number;
+  periodDays: number; // Added as per spec
+  scores: QualityScore[];
+  codeSmells: CodeSmell[];
+  detailedMetrics: DetailedMetrics;
+}
+
 export interface DeveloperData {
   name: string;
   githubHandle: string;
@@ -11,10 +72,6 @@ export interface DeveloperData {
     commitFrequency: string;
     mainActivityDay: string;
     mainActivityTime: string;
-    codeQualityScore: number;
-    maintainability: string;
-    communicationScore: number;
-    teamworkStyle: string;
     punchcard?: number[][];
     longestStreak?: number;
     busiestDay?: { date: string, count: number };
