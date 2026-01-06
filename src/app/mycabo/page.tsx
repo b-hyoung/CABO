@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from 'next/navigation';
 
-import { DeveloperData, Tab } from "@/app/types";
+import { DeveloperData, Tab, CodeQualityData, CollaborationData } from "@/app/types";
 import ActivityAnalysisTab from "./components/ActivityAnalysisTab";
 import CodeQualityTab from "./components/CodeQualityTab";
 import CollaborationStyleTab from "./components/CollaborationStyleTab";
@@ -19,37 +19,141 @@ export default function MyCaboPage() {
   const username = searchParams.get('username');
   const method = searchParams.get('method');
 
+  // State for initial developer data (Activity Tab)
   const [developer, setDeveloper] = useState<DeveloperData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // State for other tabs
+  const [qualityData, setQualityData] = useState<CodeQualityData | null>(null);
+  const [collaborationData, setCollaborationData] = useState<CollaborationData | null>(null);
+  
+  const [isQualityLoading, setIsQualityLoading] = useState(false);
+  const [qualityError, setQualityError] = useState<string | null>(null);
+
+  const [isCollaborationLoading, setIsCollaborationLoading] = useState(false);
+  const [collaborationError, setCollaborationError] = useState<string | null>(null);
+
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('activity');
 
-  useEffect(() => {
+  // --- Caching and Data Fetching ---
+  const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week
+
+  const getDeveloperData = useCallback(async () => {
     if (!username) {
       setError("GitHub 사용자 이름이 URL에 필요합니다.");
       setIsLoading(false);
       return;
     }
-    async function getDeveloperData() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/github/user/${username}?method=${method || 'pinned'}`);
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || "사용자 데이터를 불러오는데 실패했습니다.");
+
+    setIsLoading(true);
+    setError(null);
+
+    // 1. Check cache first
+    try {
+      const cachedItem = localStorage.getItem(`cabo-dev-${username}`);
+      if (cachedItem) {
+        const { data, timestamp } = JSON.parse(cachedItem);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setDeveloper(data);
+          setIsLoading(false);
+          return; // Use cached data
         }
-        const data: DeveloperData = await res.json();
-        setDeveloper(data);
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setIsLoading(false);
       }
+    } catch (e) {
+      console.error("캐시를 불러오는 데 실패했습니다:", e);
     }
-    getDeveloperData();
+
+    // 2. If no valid cache, fetch from API
+    try {
+      const res = await fetch(`/api/github/user/${username}?method=${method || 'pinned'}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "사용자 데이터를 불러오는데 실패했습니다.");
+      }
+      const data: DeveloperData = await res.json();
+      setDeveloper(data);
+      // 3. Save to cache
+      localStorage.setItem(`cabo-dev-${username}`, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
   }, [username, method]);
+
+  useEffect(() => {
+    getDeveloperData();
+  }, [getDeveloperData]);
+  
+  const fetchQualityData = useCallback(async () => {
+    if (!username || qualityData) return;
+    setIsQualityLoading(true);
+    setQualityError(null);
+    try {
+      const cachedItem = localStorage.getItem(`cabo-quality-${username}`);
+      if (cachedItem) {
+        const { data, timestamp } = JSON.parse(cachedItem);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setQualityData(data);
+          setIsQualityLoading(false);
+          return;
+        }
+      }
+      const res = await fetch(`/api/github/user/${username}/code_quality?method=${method || 'recent'}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "코드 품질 데이터를 불러오는 데 실패했습니다.");
+      }
+      const data: CodeQualityData = await res.json();
+      setQualityData(data);
+      localStorage.setItem(`cabo-quality-${username}`, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (e: any) {
+      setQualityError(e.message);
+    } finally {
+      setIsQualityLoading(false);
+    }
+  }, [username, method, qualityData]);
+
+  const fetchCollaborationData = useCallback(async () => {
+    if (!username || collaborationData) return;
+    setIsCollaborationLoading(true);
+    setCollaborationError(null);
+    try {
+      const cachedItem = localStorage.getItem(`cabo-collab-${username}`);
+      if (cachedItem) {
+        const { data, timestamp } = JSON.parse(cachedItem);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setCollaborationData(data);
+setIsCollaborationLoading(false);
+          return;
+        }
+      }
+      const res = await fetch(`/api/github/user/${username}/collaboration_style?method=pinned`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "협업 스타일 데이터를 불러오는 데 실패했습니다.");
+      }
+      const data: CollaborationData = await res.json();
+      setCollaborationData(data);
+      localStorage.setItem(`cabo-collab-${username}`, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (e: any) {
+      setCollaborationError(e.message);
+    } finally {
+      setIsCollaborationLoading(false);
+    }
+  }, [username, collaborationData]);
+
+  const handleTabClick = (tab: Tab) => {
+    setActiveTab(tab);
+    if (tab === 'quality') {
+      fetchQualityData();
+    } else if (tab === 'communication') {
+      fetchCollaborationData();
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -102,7 +206,7 @@ export default function MyCaboPage() {
           <div className="mb-4 border-b border-zinc-200 dark:border-zinc-700">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
               <button
-                onClick={() => setActiveTab('activity')}
+                onClick={() => handleTabClick('activity')}
                 className={`whitespace-nowrap border-b-2 py-4 px-1 text-base font-medium ${
                   activeTab === 'activity'
                     ? 'border-blue-500 text-blue-600'
@@ -112,7 +216,7 @@ export default function MyCaboPage() {
                 활동 분석
               </button>
               <button
-                onClick={() => setActiveTab('quality')}
+                onClick={() => handleTabClick('quality')}
                 className={`whitespace-nowrap border-b-2 py-4 px-1 text-base font-medium ${
                   activeTab === 'quality'
                     ? 'border-blue-500 text-blue-600'
@@ -122,7 +226,7 @@ export default function MyCaboPage() {
                 코드 품질
               </button>
               <button
-                onClick={() => setActiveTab('communication')}
+                onClick={() => handleTabClick('communication')}
                 className={`whitespace-nowrap border-b-2 py-4 px-1 text-base font-medium ${
                   activeTab === 'communication'
                     ? 'border-blue-500 text-blue-600'
@@ -143,10 +247,18 @@ export default function MyCaboPage() {
               </div>
             )}
             {activeTab === 'quality' && (
-              <CodeQualityTab username={username} method={method} />
+              <CodeQualityTab 
+                qualityData={qualityData}
+                isLoading={isQualityLoading}
+                error={qualityError}
+              />
             )}
             {activeTab === 'communication' && (
-              <CollaborationStyleTab developer={developer} />
+              <CollaborationStyleTab 
+                collaborationData={collaborationData}
+                isLoading={isCollaborationLoading}
+                error={collaborationError}
+              />
             )}
           </div>
         </section>

@@ -156,47 +156,6 @@ async function analyzeUserActivity(username: string, githubPat: string) {
 }
 
 
-// --- Handler for Pinned Repositories Analysis (GraphQL) ---
-async function analyzePinnedRepos(username: string, githubPat: string) {
-    const graphqlQuery = { query: `query GetPinnedReposAndUserInfo($username: String!) { user(login: $username) { name login avatarUrl pinnedItems(first: 6, types: REPOSITORY) { nodes { ... on Repository { name languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name color } } } } } } } }`, variables: { username } };
-    const res = await fetch('https://api.github.com/graphql', { method: 'POST', headers: { Authorization: `bearer ${githubPat}`, 'Content-Type': 'application/json' }, body: JSON.stringify(graphqlQuery), cache: 'no-store' });
-    if (!res.ok) { const d = await res.json(); throw new Error(`GitHub GraphQL API 오류: ${d.message||res.statusText}`); }
-    const { data } = await res.json();
-    if (!data.user) throw new Error('GitHub 사용자 이름이 존재하지 않습니다.');
-    
-    const languageStats: { [k: string]: { bytes: number, color: string | null } } = {};
-    data.user.pinnedItems.nodes.forEach((repo: any) => {
-        repo.languages.edges.forEach((edge: any) => {
-            if (!edge.node) return;
-            languageStats[edge.node.name] = { bytes: (languageStats[edge.node.name]?.bytes || 0) + edge.size, color: edge.node.color };
-        });
-    });
-    return { userData: data.user, languageStats, repoNodes: data.user.pinnedItems.nodes };
-}
-
-// --- Handler for Recent Repositories Analysis (REST) ---
-async function analyzeRecentRepos(username: string, githubPat: string) {
-    const headers = { Authorization: `token ${githubPat}`, 'X-GitHub-Api-Version': '2022-11-28' };
-    const userRes = await fetch(`https://api.github.com/users/${username}`, { headers, cache: 'no-store' });
-    if (!userRes.ok) { if (userRes.status === 404) throw new Error('GitHub 사용자 이름이 존재하지 않습니다.'); throw new Error(`GitHub API 오류: ${userRes.statusText}`); }
-    const userData = await userRes.json();
-    const reposRes = await fetch(`https://api.github.com/users/${username}/repos?type=owner&sort=pushed&per_page=100`, { headers, cache: 'no-store' });
-    if (!reposRes.ok) throw new Error(`리포지토리 조회 API 오류: ${reposRes.statusText}`);
-    const reposData = await reposRes.json();
-    const languageStats: { [k: string]: { bytes: number, color: string | null } } = {};
-    const topRepos = reposData.filter((repo: any) => !repo.fork && repo.language).slice(0, 15);
-    await Promise.all(topRepos.map(async (repo: any) => {
-        const langRes = await fetch(repo.languages_url, { headers, cache: 'no-store' });
-        if (langRes.ok) {
-            const langData = await langRes.json();
-            for (const [lang, bytes] of Object.entries(langData)) {
-                languageStats[lang] = { bytes: (languageStats[lang]?.bytes || 0) + (bytes as number), color: null };
-            }
-        }
-    }));
-    return { userData, languageStats };
-}
-
 // --- Main GET Handler ---
 export async function GET(request: NextRequest) {
     const url = new URL(request.url);
@@ -206,26 +165,64 @@ export async function GET(request: NextRequest) {
     if (!githubPat) return NextResponse.json({ error: 'GitHub PAT가 서버에 설정되지 않았습니다.' }, { status: 500 });
 
     try {
-        let userData: any;
-        let languageStats: { [k: string]: { bytes: number, color: string | null } };
-        let activityStats: any; // Declare activityStats here
+        const headers = { Authorization: `token ${githubPat}`, 'X-GitHub-Api-Version': '2022-11-28' };
 
-        if (method === 'recent') {
-            ({ userData, languageStats } = await analyzeRecentRepos(username, githubPat));
-            activityStats = await analyzeUserActivity(username, githubPat); // Use global events for recent
-        } else { // Default to 'pinned'
-            const { userData: ud, languageStats: ls, repoNodes } = await analyzePinnedRepos(username, githubPat);
-            userData = ud;
-            languageStats = ls;
-            // No longer calling analyzeCommitsForRepos directly here for activityStats in pinned context
-            // The activityStats for pinned repos will now come from a separate call in the client if needed or be derived from the new code quality endpoint
-            // For now, let's make activityStats for 'pinned' also use analyzeUserActivity for consistency
-            activityStats = await analyzeUserActivity(username, githubPat);
+        // Fetch userData
+        const userRes = await fetch(`https://api.github.com/users/${username}`, { headers, cache: 'no-store' });
+        if (!userRes.ok) {
+            if (userRes.status === 404) throw new Error('GitHub 사용자 이름이 존재하지 않습니다.');
+            throw new Error(`GitHub API 오류: ${userRes.statusText}`);
         }
+        const userData = await userRes.json();
+
+        // Fetch languageStats from repositories (pinned or recent based on method)
+        let reposData: any[] = [];
+        if (method === 'recent') {
+            const reposRes = await fetch(`https://api.github.com/users/${username}/repos?type=owner&sort=pushed&per_page=100`, { headers, cache: 'no-store' });
+            if (!reposRes.ok) throw new Error(`리포지토리 조회 API 오류: ${reposRes.statusText}`);
+            reposData = await reposRes.json(); // Added await
+        } else { // default to 'pinned'
+            const graphqlQuery = { query: `query GetPinnedReposAndUserInfo($username: String!) { user(login: $username) { pinnedItems(first: 6, types: REPOSITORY) { nodes { ... on Repository { name languages(first: 10, orderBy: {field: SIZE, direction: DESC}) { edges { size node { name color } } } } } } } }`, variables: { username } };
+            const graphqlRes = await fetch('https://api.github.com/graphql', { method: 'POST', headers: { Authorization: `bearer ${githubPat}`, 'Content-Type': 'application/json' }, body: JSON.stringify(graphqlQuery), cache: 'no-store' });
+            if (!graphqlRes.ok) { const d = await graphqlRes.json(); throw new Error(`GitHub GraphQL API 오류: ${d.message||graphqlRes.statusText}`); }            const { data: graphqlData } = await graphqlRes.json();
+            reposData = graphqlData.user.pinnedItems.nodes;
+        }
+
+        const languageStats: { [k: string]: { bytes: number, color: string | null } } = {};
+        // Ensure reposData is an array before filtering and mapping
+        const topRepos = Array.isArray(reposData) ? reposData.filter((repo: any) => {
+            // For REST API repos (recent)
+            if (repo.language) return !repo.fork;
+            // For GraphQL API repos (pinned)
+            if (repo.languages && repo.languages.edges && repo.languages.edges.length > 0) return true;
+            return false;
+        }).slice(0, 15) : [];
+
+        await Promise.all(topRepos.map(async (repo: any) => {
+            // For pinned repos (GraphQL), languages are directly available in the initial query.
+            // For recent repos (REST), need to fetch language_url.
+            if (repo.languages && repo.languages.edges) { // GraphQL structure (pinned)
+                repo.languages.edges.forEach((edge: any) => {
+                    if (!edge.node) return;
+                    languageStats[edge.node.name] = { bytes: (languageStats[edge.node.name]?.bytes || 0) + edge.size, color: edge.node.color };
+                });
+            } else if (repo.languages_url) { // REST structure (recent)
+                const langRes = await fetch(repo.languages_url, { headers, cache: 'no-store' });
+                if (langRes.ok) {
+                    const langData = await langRes.json();
+                    for (const [lang, bytes] of Object.entries(langData)) {
+                        languageStats[lang] = { bytes: (languageStats[lang]?.bytes || 0) + (bytes as number), color: null };
+                    }
+                }
+            }
+        }));
+
 
         const totalBytes = Object.values(languageStats).reduce((sum, lang) => sum + lang.bytes, 0);
         const topLanguages = Object.entries(languageStats).sort(([, a], [, b]) => b.bytes - a.bytes).slice(0, 3).map(([name, { bytes, color }]) => ({ name, percentage: totalBytes > 0 ? parseFloat(((bytes / totalBytes) * 100).toFixed(1)) : 0, color: color || `hsl(${Math.random() * 360}, 70%, 50%)` }));
 
+        const activityStats = await analyzeUserActivity(username, githubPat); // Use global events for recent or pinned
+        
         return NextResponse.json({
             name: userData.name || userData.login,
             githubHandle: userData.login,
