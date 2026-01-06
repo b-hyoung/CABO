@@ -1,36 +1,40 @@
 import Image from 'next/image';
 import { DeveloperData } from '@/app/types';
 
+interface Archetype {
+    name: string;
+    icon: string;
+    description: string;
+}
+
 interface Props {
     developer: DeveloperData;
     traits: string[];
+    archetype: Archetype;
 }
 
-const ProfileCard = ({ developer, traits }: Props) => {
+const ProfileCard = ({ developer, traits, archetype }: Props) => {
     return (
         <section className="w-full rounded-2xl bg-gradient-to-br from-white to-zinc-100 dark:from-zinc-800 dark:to-zinc-900 p-8 shadow-lg transition-all duration-300 hover:shadow-xl">
             <div className="grid md:grid-cols-3 gap-8 items-center">
                 <div className="md:col-span-2 flex flex-col sm:flex-row items-center gap-8">
                     <div className="relative flex-shrink-0">
                         <Image src={developer.avatarUrl} alt="Developer Avatar" width={128} height={128} className="rounded-full border-4 border-white dark:border-zinc-700 shadow-md" />
-                        <span className="absolute bottom-1 right-1 text-4xl">{developer.tierIcon}</span>
+                        <span className="absolute bottom-1 right-1 text-4xl">{archetype.icon}</span>
                     </div>
                     <div className="flex flex-col items-center sm:items-start gap-2">
                         <h2 className="text-4xl font-extrabold text-black dark:text-white">{developer.name}</h2>
                         <p className="text-lg text-zinc-500 dark:text-zinc-400">@{developer.githubHandle}</p>
-                        <div className={`mt-4 rounded-full px-4 py-1.5 text-lg font-bold ${developer.tierColor} bg-blue-100 dark:bg-blue-900/50`}>
-                            {developer.tier} Tier
+                        <div className={`mt-4 inline-block rounded-full px-4 py-1.5 text-lg font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/50`}>
+                            {archetype.name}
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2 justify-center sm:justify-start">
-                            {traits.length > 0 ? (
-                                traits.map(trait => (
-                                    <span key={trait} className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-200 dark:bg-zinc-700 rounded-full px-3 py-1">
-                                        {trait}
-                                    </span>
-                                ))
-                            ) : (
-                                <p className="text-sm text-zinc-500 dark:text-zinc-400">분석 중...</p>
-                            )}
+                        <p className="mt-2 text-center sm:text-left text-zinc-600 dark:text-zinc-300">{archetype.description}</p>
+                         <div className="mt-3 flex flex-wrap gap-2 justify-center sm:justify-start">
+                            {traits.map(trait => (
+                                <span key={trait} className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-200 dark:bg-zinc-700 rounded-full px-3 py-1">
+                                    {trait}
+                                </span>
+                            ))}
                         </div>
                     </div>
                 </div>

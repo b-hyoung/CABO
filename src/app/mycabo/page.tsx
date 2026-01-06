@@ -40,63 +40,379 @@ export default function MyCaboPage() {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('activity');
 
-  // State for Share Modal & Dynamic Description
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState('');
-  const [dynamicTraits, setDynamicTraits] = useState<string[]>([]);
+    // State for Share Modal & Dynamic Content
 
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  useEffect(() => {
-    // Ensure window is defined (runs only on client)
-    if (typeof window !== 'undefined') {
-      setCurrentUrl(window.location.href);
-    }
-  }, []);
+    const [currentUrl, setCurrentUrl] = useState('');
 
-  // ... (caching and data fetching functions remain the same) ...
+    const [dynamicTraits, setDynamicTraits] = useState<string[]>([]);
 
-  // --- Dynamic Description Generation ---
-  useEffect(() => {
-    if (developer && qualityData && collaborationData) {
-        const traits: string[] = [];
+    const [archetype, setArchetype] = useState({ name: '분석 중...', icon: '🤔', description: '데이터를 종합하여 개발자 유형을 분석하고 있습니다.' });
 
-        // 1. Activity Trait
-        const activityPersona = developer.stats.consistency;
-        if (activityPersona.includes("마라토너")) traits.push("#꾸준한_활동가");
-        else if (activityPersona.includes("주말")) traits.push("#주말_집중");
-        else if (activityPersona.includes("올빼미")) traits.push("#새벽반");
-        else if (activityPersona.includes("오전형")) traits.push("#아침형_개발자");
+  
 
-        // 2. Quality Trait
-        const topQualityScore = qualityData.scores.reduce(
-          (max, score) => (score.score > max.score ? score : max),
-          qualityData.scores[0] || { subject: '', score: 0 }
-        );
-        if (topQualityScore.score > 80) {
-             switch (topQualityScore.subject) {
-                case '작업분할': traits.push("#ATOMIC_커밋"); break;
-                case '의미도': traits.push("#클린_커밋"); break;
-                case '구조화': traits.push("#체계적인_관리"); break;
-            }
+  
+
+    useEffect(() => {
+
+      // Ensure window is defined (runs only on client)
+
+      if (typeof window !== 'undefined') {
+
+        setCurrentUrl(window.location.href);
+
+      }
+
+    }, []);
+
+  
+
+    // --- Caching and Data Fetching ---
+
+    const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week
+
+  
+
+    const getDeveloperData = useCallback(async () => {
+
+      if (!username) {
+
+        setError("GitHub 사용자 이름이 URL에 필요합니다.");
+
+        setIsLoading(false);
+
+        return;
+
+      }
+
+  
+
+      setIsLoading(true);
+
+      setError(null);
+
+  
+
+      // 1. Check cache first
+
+      try {
+
+        const cachedItem = localStorage.getItem(`cabo-dev-${username}`);
+
+        if (cachedItem) {
+
+          const { data, timestamp } = JSON.parse(cachedItem);
+
+          if (Date.now() - timestamp < CACHE_DURATION) {
+
+            setDeveloper(data);
+
+            setIsLoading(false);
+
+            return; // Use cached data
+
+          }
+
         }
-        
-        // 3. Collaboration Trait
-        const teamRepoAnalysis = collaborationData.repoAnalyses.find(r => r.classification === 'Team');
-        if (teamRepoAnalysis) {
-            const collabProfile = getPrStyleProfile(teamRepoAnalysis.metrics);
-            if(collabProfile.persona !== "정보 부족") {
-                traits.push(`#${collabProfile.persona.replace(/\s/g, '_')}`);
-            }
+
+      } catch (e) {
+
+        console.error("캐시를 불러오는 데 실패했습니다:", e);
+
+      }
+
+  
+
+      // 2. If no valid cache, fetch from API
+
+      try {
+
+        const res = await fetch(`/api/github/user/${username}?method=${method || 'pinned'}`);
+
+        if (!res.ok) {
+
+          const errorData = await res.json();
+
+          throw new Error(errorData.error || "사용자 데이터를 불러오는데 실패했습니다.");
+
         }
 
-        // Ensure we have at least one trait, or a default one
-        if (traits.length === 0) {
-            traits.push("#탐색중");
+        const data: DeveloperData = await res.json();
+
+        setDeveloper(data);
+
+        // 3. Save to cache
+
+        localStorage.setItem(`cabo-dev-${username}`, JSON.stringify({ data, timestamp: Date.now() }));
+
+      } catch (e: any) {
+
+        setError(e.message);
+
+      }
+
+      finally {
+
+        setIsLoading(false);
+
+      }
+
+    }, [username, method]);
+
+    
+
+    const fetchQualityData = useCallback(async () => {
+
+      if (!username || qualityData) return;
+
+      setIsQualityLoading(true);
+
+      setQualityError(null);
+
+      try {
+
+        const cachedItem = localStorage.getItem(`cabo-quality-${username}`);
+
+        if (cachedItem) {
+
+          const { data, timestamp } = JSON.parse(cachedItem);
+
+          if (Date.now() - timestamp < CACHE_DURATION) {
+
+            setQualityData(data);
+
+            setIsQualityLoading(false);
+
+            return;
+
+          }
+
         }
 
-        setDynamicTraits(traits.slice(0, 3)); // Max 3 traits
-    }
-  }, [developer, qualityData, collaborationData]);
+        const res = await fetch(`/api/github/user/${username}/code_quality?method=${method || 'recent'}`);
+
+        if (!res.ok) {
+
+          const errorData = await res.json();
+
+          throw new Error(errorData.error || "코드 품질 데이터를 불러오는 데 실패했습니다.");
+
+        }
+
+        const data: CodeQualityData = await res.json();
+
+        setQualityData(data);
+
+        localStorage.setItem(`cabo-quality-${username}`, JSON.stringify({ data, timestamp: Date.now() }));
+
+      } catch (e: any) {
+
+        setQualityError(e.message);
+
+      }
+
+      finally {
+
+        setIsLoading(false);
+
+      }
+
+    }, [username, method]);
+
+  
+
+    const fetchCollaborationData = useCallback(async () => {
+
+      if (!username || collaborationData) return;
+
+      setIsCollaborationLoading(true);
+
+      setCollaborationError(null);
+
+      try {
+
+        const cachedItem = localStorage.getItem(`cabo-collab-${username}`);
+
+        if (cachedItem) {
+
+          const { data, timestamp } = JSON.parse(cachedItem);
+
+          if (Date.now() - timestamp < CACHE_DURATION) {
+
+            setCollaborationData(data);
+
+            setIsCollaborationLoading(false);
+
+            return;
+
+          }
+
+        }
+
+        const res = await fetch(`/api/github/user/${username}/collaboration_style?method=pinned`);
+
+        if (!res.ok) {
+
+          const errorData = await res.json();
+
+          throw new Error(errorData.error || "협업 스타일 데이터를 불러오는 데 실패했습니다.");
+
+        }
+
+        const data: CollaborationData = await res.json();
+
+        setCollaborationData(data);
+
+        localStorage.setItem(`cabo-collab-${username}`, JSON.stringify({ data, timestamp: Date.now() }));
+
+      } catch (e: any) {
+
+        setCollaborationError(e.message);
+
+      }
+
+      finally {
+
+        setIsCollaborationLoading(false);
+
+      }
+
+    }, [username]);
+
+  
+
+    // Initial data fetch
+
+    useEffect(() => {
+
+      getDeveloperData();
+
+    }, [getDeveloperData]);
+
+  
+
+    // --- Prefetching for other tabs ---
+
+    useEffect(() => {
+
+      if (developer) {
+
+        // Once the main data is loaded, prefetch the data for other tabs in the background
+
+        fetchQualityData();
+
+        fetchCollaborationData();
+
+      }
+
+    }, [developer, fetchQualityData, fetchCollaborationData]);
+
+  
+
+    // --- Dynamic Content Generation ---
+
+    useEffect(() => {
+
+      if (developer && qualityData && collaborationData) {
+
+          const traits: string[] = [];
+
+          let primaryArchetype = { name: '꾸준한 기여자', icon: '🌱', description: '자신만의 속도로 꾸준히 프로젝트에 기여합니다.' };
+
+  
+
+          // 1. Determine Primary Archetype
+
+          const topQualityScore = qualityData.scores.reduce((max, score) => (score.score > max.score ? score : max), { subject: '', score: 0 });
+
+          const teamRepoAnalysis = collaborationData.repoAnalyses.find(r => r.classification === 'Team');
+
+          
+
+          if (teamRepoAnalysis) {
+
+              const collabProfile = getPrStyleProfile(teamRepoAnalysis.metrics);
+
+              if (collabProfile.persona === '애자일 기여자') {
+
+                  primaryArchetype = { name: '애자일 기여자', icon: '🚀', description: '신속하고 작은 단위로 기여하며, 빠른 이터레이션을 주도합니다.' };
+
+              } else if (collabProfile.persona === '피쳐 개발자') {
+
+                  primaryArchetype = { name: '피쳐 개발자', icon: '🏗️', description: '크고 중요한 피쳐를 중심으로 깊이 있게 작업합니다.' };
+
+              }
+
+          } else if (topQualityScore.score > 85) {
+
+              if (topQualityScore.subject === '구조화') {
+
+                  primaryArchetype = { name: '시스템 설계자', icon: '🏛️', description: '체계적인 코드 구조와 전체적인 설계를 중시합니다.' };
+
+              } else if (topQualityScore.subject === '의미도') {
+
+                  primaryArchetype = { name: '코드 장인', icon: '🎨', description: '읽기 쉽고 의도가 명확한 클린 코드를 작성합니다.' };
+
+              }
+
+          } else if (developer.stats.consistency.includes("마라토너")) {
+
+               primaryArchetype = { name: '성실한 마라토너', icon: '🏃', description: '매주 꾸준히 커밋하며 프로젝트의 지구력을 담당합니다.' };
+
+          }
+
+          setArchetype(primaryArchetype);
+
+  
+
+          // 2. Generate supporting traits (Hashtags)
+
+          const activityPersona = developer.stats.consistency;
+
+          if (activityPersona.includes("마라토너")) traits.push("#꾸준함");
+
+          else if (activityPersona.includes("주말")) traits.push("#주말_집중");
+
+          else if (activityPersona.includes("올빼미")) traits.push("#새벽반");
+
+  
+
+          if (topQualityScore.score > 80) {
+
+               switch (topQualityScore.subject) {
+
+                  case '작업분할': traits.push("#ATOMIC_커밋"); break;
+
+                  case '의미도': traits.push("#클린_커밋"); break;
+
+                  case '구조화': traits.push("#체계적"); break;
+
+              }
+
+          }
+
+          if (teamRepoAnalysis) {
+
+              const collabProfile = getPrStyleProfile(teamRepoAnalysis.metrics);
+
+              if(collabProfile.persona !== "정보 부족") {
+
+                  traits.push(`#${collabProfile.persona.replace(/\s/g, '_')}`);
+
+              }
+
+          }
+
+          if (traits.length === 0) traits.push("#탐색중");
+
+          
+
+          setDynamicTraits(traits.filter(t => !primaryArchetype.name.includes(t.replace('#',''))).slice(0, 3));
+
+      }
+
+    }, [developer, qualityData, collaborationData]);
 
   const handleTabClick = (tab: Tab) => {
     setActiveTab(tab);
@@ -151,7 +467,7 @@ export default function MyCaboPage() {
           </button>
         </header>
 
-        <ProfileCard developer={developer} traits={dynamicTraits} />
+        <ProfileCard developer={developer} traits={dynamicTraits} archetype={archetype} />
 
         <section className="w-full">
           <div className="mb-4 border-b border-zinc-200 dark:border-zinc-700 no-print">
