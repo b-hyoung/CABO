@@ -36,6 +36,38 @@ const ShareModal = ({ isOpen, onClose, reportUrl, username }: Props) => {
         });
     };
 
+    const handleSaveAsImage = async () => {
+        const reportElement = document.getElementById('report-content');
+        if (!reportElement) {
+            alert('리포트 요소를 찾을 수 없습니다.');
+            return;
+        }
+
+        setIsGeneratingImage(true);
+
+        try {
+            const canvas = await html2canvas(reportElement, {
+                useCORS: true, // For external images like avatars
+                scale: 2, // Increase resolution
+                backgroundColor: '#09090b' // Match dark theme background
+            });
+            const image = canvas.toDataURL('image/png');
+            
+            const link = document.createElement('a');
+            link.href = image;
+            link.download = `cabo-report-${username}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (error) {
+            console.error('이미지 생성에 실패했습니다:', error);
+            alert('이미지 생성에 실패했습니다.');
+        } finally {
+            setIsGeneratingImage(false);
+        }
+    };
+
     const handlePrint = () => {
         onClose(); // Close the modal before printing
         setTimeout(() => window.print(), 100); // Give modal time to disappear
@@ -47,7 +79,7 @@ const ShareModal = ({ isOpen, onClose, reportUrl, username }: Props) => {
             onClick={onClose}
         >
             <div 
-                className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-8 m-4 transform animate-scale-in"
+                className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-8 m-4 transform animate-scale-in bg-opacity-95 dark:bg-opacity-95"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex justify-between items-center mb-6">
