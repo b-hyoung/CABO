@@ -75,11 +75,11 @@ const ShareModal = ({ isOpen, onClose, reportUrl, username }: Props) => {
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 animate-fade-in-fast no-print modal-backdrop-blur"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in-fast no-print"
             onClick={onClose}
         >
             <div 
-                className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-8 m-4 transform animate-scale-in bg-opacity-95 dark:bg-opacity-95"
+                className="w-full max-w-md rounded-2xl bg-white/90 p-8 shadow-2xl backdrop-blur-lg dark:bg-zinc-800/90 transform animate-scale-in"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex justify-between items-center mb-6">
