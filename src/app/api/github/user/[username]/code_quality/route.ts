@@ -70,45 +70,29 @@ async function analyzeCommitChanges(allUserCommits: any[], username: string, git
     };
 }
 
-// Helper to determine overall hygiene rating
-function getOverallRating(
-    commitMessageAnalysis: { meaninglessCommitRatio: number; shortMessageRatio: number; structuredCommitRatio: number; },
-    commitChangeAnalysis: { giantCommitRatio: number; manyFilesCommitRatio: number; },
-    commitRhythmAndSignals: { weeklyVolatility: number; revertCommitRatio: number; hotfixCommitRatio: number; }
-): 'Clean' | 'Mixed' | 'Messy' {
-    // Define thresholds
-    const THRESHOLD_MEANINGLESS_HIGH = 30; // > 30% is high
-    const THRESHOLD_GIANT_HIGH = 20;       // > 20% is high
-    const THRESHOLD_MANY_FILES_HIGH = 15;  // > 15% is high
+// Helper to analyze commit changes (size and blast radius)
 
-    const THRESHOLD_MEANINGLESS_LOW = 10;  // < 10% is low
-    const THRESHOLD_GIANT_LOW = 5;         // < 5% is low
-    const THRESHOLD_MANY_FILES_LOW = 10;   // < 10% is low
-
-    // Check for "Messy" conditions first
-    if (commitMessageAnalysis.meaninglessCommitRatio > THRESHOLD_MEANINGLESS_HIGH ||
-        commitChangeAnalysis.giantCommitRatio > THRESHOLD_GIANT_HIGH ||
-        commitChangeAnalysis.manyFilesCommitRatio > THRESHOLD_MANY_FILES_HIGH ||
-        commitRhythmAndSignals.revertCommitRatio > 5 || // Already used in codeSmells, just for rating
-        commitRhythmAndSignals.hotfixCommitRatio > 3 // Already used in codeSmells, just for rating
-    ) {
-        return 'Messy';
-    }
-
-    // Check for "Clean" conditions
-    if (commitMessageAnalysis.meaninglessCommitRatio < THRESHOLD_MEANINGLESS_LOW &&
-        commitChangeAnalysis.giantCommitRatio < THRESHOLD_GIANT_LOW &&
-        commitChangeAnalysis.manyFilesCommitRatio < THRESHOLD_MANY_FILES_LOW &&
-        commitMessageAnalysis.structuredCommitRatio > 70 && // Assuming good structure contributes to clean
-        commitRhythmAndSignals.weeklyVolatility < 50 && // Assuming low volatility contributes to clean
-        commitRhythmAndSignals.revertCommitRatio < 1 &&
-        commitRhythmAndSignals.hotfixCommitRatio < 1
-    ) {
-        return 'Clean';
-    }
-
-    // Otherwise, it's "Mixed"
-    return 'Mixed';
+// --- Handler for Recent Repositories Analysis (REST) ---
+async function analyzeRecentRepos(username: string, githubPat: string) {
+    const headers = { Authorization: `token ${githubPat}`, 'X-GitHub-Api-Version': '2022-11-28' };
+    const userRes = await fetch(`https://api.github.com/users/${username}`, { headers, cache: 'no-store' });
+    if (!userRes.ok) { if (userRes.status === 404) throw new Error('GitHub 사용자 이름이 존재하지 않습니다.'); throw new Error(`GitHub API 오류: ${userRes.statusText}`); }
+    const userData = await userRes.json();
+    const reposRes = await fetch(`https://api.github.com/users/${username}/repos?type=owner&sort=pushed&per_page=100`, { headers, cache: 'no-store' });
+    if (!reposRes.ok) throw new Error(`리포지토리 조회 API 오류: ${reposRes.statusText}`);
+    const reposData = await reposRes.json();
+    const languageStats: { [k: string]: { bytes: number, color: string | null } } = {};
+    const topRepos = reposData.filter((repo: any) => !repo.fork && repo.language).slice(0, 15); // Filter top 15 non-forked, language-defined repos
+    await Promise.all(topRepos.map(async (repo: any) => {
+        const langRes = await fetch(repo.languages_url, { headers, cache: 'no-store' });
+        if (langRes.ok) {
+            const langData = await langRes.json();
+            for (const [lang, bytes] of Object.entries(langData)) {
+                languageStats[lang] = { bytes: (languageStats[lang]?.bytes || 0) + (bytes as number), color: null };
+            }
+        }
+    }));
+    return { userData, languageStats, repoNodes: topRepos }; // Also return topRepos as repoNodes
 }
 
 // --- Handler for Pinned Repositories Analysis (GraphQL) ---
@@ -397,6 +381,7 @@ export async function GET(request: NextRequest) {
     // Correctly extract the username which is the segment before 'code_quality'
     const pathSegments = url.pathname.split('/');
     const username = pathSegments[pathSegments.length - 2];
+    const method = url.searchParams.get('method') || 'pinned'; // Get method from URL
     const githubPat = process.env.GITHUB_PAT;
 
     if (!githubPat) {
@@ -404,62 +389,88 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const { repoNodes } = await analyzePinnedRepos(username, githubPat);
+        let repoNodes: any[] = [];
+        if (method === 'recent') {
+            const { repoNodes: recentRepoNodes } = await analyzeRecentRepos(username, githubPat);
+            repoNodes = recentRepoNodes;
+        } else { // default to 'pinned'
+            const { repoNodes: pinnedRepoNodes } = await analyzePinnedRepos(username, githubPat);
+            repoNodes = pinnedRepoNodes;
+        }
+        
         const { allUserCommits, weeklyCommitCounts } = await analyzeCommitsForRepos(username, repoNodes, githubPat);
         const commitMessageAnalysis = await analyzeCommitMessages(allUserCommits);
         const commitChangeAnalysis = await analyzeCommitChanges(allUserCommits, username, githubPat);
         const commitRhythmAndSignals = await analyzeCommitRhythmAndSignals(allUserCommits, weeklyCommitCounts);
 
-        const overallRating = getOverallRating(commitMessageAnalysis, commitChangeAnalysis, commitRhythmAndSignals);
-
-        const meaningfulnessScore = Math.round(100 - commitMessageAnalysis.meaninglessCommitRatio);
-        const rhythmScore = Math.min(100, Math.round(commitRhythmAndSignals.activityWeekCoverageRatio)); // Cap at 100
-
         const detailedMetrics: DetailedMetrics = {
-            totalCommits: commitMessageAnalysis.totalCommits, // Assuming totalCommits is the same across all analysis for consistency
-
+            totalCommits: commitMessageAnalysis.totalCommits,
             meaninglessCommitRatio: commitMessageAnalysis.meaninglessCommitRatio,
             meaninglessCommitsCount: commitMessageAnalysis.meaninglessCommitsCount,
-
             avgMessageLength: commitMessageAnalysis.avgMessageLength,
+            medianMessageLength: commitMessageAnalysis.medianMessageLength,
             shortMessageRatio: commitMessageAnalysis.shortMessageRatio,
             shortCommitsCount: commitMessageAnalysis.shortCommitsCount,
-
             structuredCommitRatio: commitMessageAnalysis.structuredCommitRatio,
             structuredCommitsCount: commitMessageAnalysis.structuredCommitsCount,
-
             totalLinesChangedMedian: commitChangeAnalysis.totalLinesChangedMedian,
             giantCommitRatio: commitChangeAnalysis.giantCommitRatio,
             giantCommitsCount: commitChangeAnalysis.giantCommitsCount,
-
             filesChangedCountMedian: commitChangeAnalysis.filesChangedCountMedian,
             manyFilesCommitRatio: commitChangeAnalysis.manyFilesCommitRatio,
             manyFilesCommitsCount: commitChangeAnalysis.manyFilesCommitsCount,
-
             activityWeekCoverageRatio: commitRhythmAndSignals.activityWeekCoverageRatio,
             activeWeeksCount: commitRhythmAndSignals.activeWeeksCount,
             analysisPeriodWeeks: commitRhythmAndSignals.analysisPeriodWeeks,
             weeklyVolatility: commitRhythmAndSignals.weeklyVolatility,
-
             revertCommitRatio: commitRhythmAndSignals.revertCommitRatio,
             revertCommitsCount: commitRhythmAndSignals.revertCommitsCount,
             hotfixCommitRatio: commitRhythmAndSignals.hotfixCommitRatio,
             hotfixCommitsCount: commitRhythmAndSignals.hotfixCommitsCount,
         };
 
+        const totalCommits = detailedMetrics.totalCommits;
+        let scores: QualityScore[];
+
+        if (totalCommits < 5) { // If there's not enough data, all scores are 0
+            scores = [
+                { subject: '의미도', score: 0, fullMark: 100 },
+                { subject: '정보량', score: 0, fullMark: 100 },
+                { subject: '구조화', score: 0, fullMark: 100 },
+                { subject: '작업분할', score: 0, fullMark: 100 },
+                { subject: '변경범위', score: 0, fullMark: 100 },
+                { subject: '리듬', score: 0, fullMark: 100 },
+            ];
+        } else {
+            const meaningfulnessScore = Math.round(100 - detailedMetrics.meaninglessCommitRatio);
+            const rhythmScore = Math.min(100, Math.round(detailedMetrics.activityWeekCoverageRatio)); // Cap at 100
+            scores = [
+                { subject: '의미도', score: meaningfulnessScore, fullMark: 100 },
+                { subject: '정보량', score: Math.round(100 - detailedMetrics.shortMessageRatio), fullMark: 100 },
+                { subject: '구조화', score: Math.round(detailedMetrics.structuredCommitRatio), fullMark: 100 },
+                { subject: '작업분할', score: Math.round(100 - detailedMetrics.giantCommitRatio), fullMark: 100 },
+                { subject: '변경범위', score: Math.round(100 - detailedMetrics.manyFilesCommitRatio), fullMark: 100 },
+                { subject: '리듬', score: rhythmScore, fullMark: 100 },
+            ];
+        }
+
+        const confidence = Math.min(1, totalCommits / 50);
+        const periodDays = 90; // As per spec
+
+        const simpleCommits = allUserCommits.map((c: any) => ({
+            sha: c.sha,
+            message: c.commit.message,
+            date: c.commit.author.date,
+            html_url: c.html_url,
+        }));
 
         const qualityData: CodeQualityData = {
-            overallRating: overallRating,
-            scores: [
-                { subject: '의미도', score: meaningfulnessScore, fullMark: 100 },
-                { subject: '정보량', score: Math.round(100 - commitMessageAnalysis.shortMessageRatio), fullMark: 100 },
-                { subject: '구조화', score: Math.round(commitMessageAnalysis.structuredCommitRatio), fullMark: 100 },
-                { subject: '작업분할', score: Math.round(100 - commitChangeAnalysis.giantCommitRatio), fullMark: 100 },
-                { subject: '변경범위', score: Math.round(100 - commitChangeAnalysis.manyFilesCommitRatio), fullMark: 100 },
-                { subject: '리듬', score: rhythmScore, fullMark: 100 },
-            ],
+            confidence: confidence,
+            periodDays: periodDays,
+            scores: scores,
             codeSmells: [],
             detailedMetrics: detailedMetrics,
+            commits: simpleCommits,
         };
 
         // Add code smells based on commit message analysis

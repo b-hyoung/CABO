@@ -26,17 +26,23 @@ const ProfileCard = ({ developer }: Props) => {
                 <div className="md:col-span-1 flex flex-col gap-4">
                     <h3 className="text-lg font-bold text-black dark:text-white text-center md:text-left">주요 사용 언어</h3>
                     <div className="space-y-3">
-                        {developer.languages && developer.languages.map(lang => (
-                            <div key={lang.name}>
-                                <div className="flex justify-between mb-1">
-                                    <span className="text-base font-medium text-zinc-700 dark:text-zinc-300">{lang.name}</span>
-                                    <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{lang.percentage}%</span>
+                        {developer.languages && developer.languages.length > 0 ? (
+                            developer.languages.map(lang => (
+                                <div key={lang.name}>
+                                    <div className="flex justify-between mb-1">
+                                        <span className="text-base font-medium text-zinc-700 dark:text-zinc-300">{lang.name}</span>
+                                        <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{lang.percentage}%</span>
+                                    </div>
+                                    <div className="w-full bg-zinc-200 rounded-full h-2.5 dark:bg-zinc-700">
+                                        <div className="h-2.5 rounded-full" style={{ width: `${lang.percentage}%`, backgroundColor: lang.color }}></div>
+                                    </div>
                                 </div>
-                                <div className="w-full bg-zinc-200 rounded-full h-2.5 dark:bg-zinc-700">
-                                    <div className="h-2.5 rounded-full" style={{ width: `${lang.percentage}%`, backgroundColor: lang.color }}></div>
-                                </div>
-                            </div>
-                        ))}
+                            ))
+                        ) : (
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center md:text-left">
+                                주요 사용 언어 정보가 없습니다.
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>

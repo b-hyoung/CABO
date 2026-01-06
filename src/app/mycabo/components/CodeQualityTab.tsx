@@ -1,5 +1,4 @@
-"use client";
-
+import { useState } from 'react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { QualityScore, CodeSmell, CodeQualityData } from '@/app/types'; // Import types
 
@@ -30,6 +29,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // --- Main Component ---
 const CodeQualityTab = ({ qualityData, isLoading, error }: Props) => {
+    const [isCommitListOpen, setIsCommitListOpen] = useState(false);
+
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-80 rounded-xl bg-white dark:bg-zinc-800 p-6 shadow-md">
@@ -58,12 +59,22 @@ const CodeQualityTab = ({ qualityData, isLoading, error }: Props) => {
         <div className="space-y-8 animate-fade-in">
             {/* Score Section */}
             <div className="rounded-xl bg-white dark:bg-zinc-800 p-6 sm:p-8 shadow-md">
-                <h3 className="flex items-center gap-2 text-xl font-bold text-black dark:text-white mb-4">
-                    <span className="text-2xl">📊</span> 코드 품질 상세 지표
-                </h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="flex items-center gap-2 text-xl font-bold text-black dark:text-white">
+                        <span className="text-2xl">📊</span> 코드 품질 상세 지표
+                    </h3>
+                    <button 
+                        onClick={() => setIsCommitListOpen(!isCommitListOpen)}
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
+                    >
+                        {isCommitListOpen ? '커밋 목록 닫기' : '분석된 커밋 목록 열기'}
+                    </button>
+                </div>
+
                 <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
                     각 지표는 커밋 습관의 특정 측면을 점수화합니다. 점수가 높을수록 해당 습관이 잘 관리되고 있음을 의미합니다.
                 </p>
+
                 <div className="grid md:grid-cols-2 gap-8 items-center">
                     {/* Column 1: Radar Chart */}
                     <div className="w-full h-72 sm:h-80">
@@ -91,18 +102,41 @@ const CodeQualityTab = ({ qualityData, isLoading, error }: Props) => {
                                 default: description = '';
                             }
                             return (
-                                <div key={item.subject} className="flex flex-col mb-3 last:mb-0"> {/* Added mb-3 for spacing */}
-                                    <div className="flex justify-between items-start"> {/* items-start for better alignment */}
-                                        <span className="font-semibold text-zinc-700 dark:text-zinc-300 w-2/3">{item.subject}</span> {/* Give more space for subject */}
+                                <div key={item.subject} className="flex flex-col mb-3 last:mb-0">
+                                    <div className="flex justify-between items-start">
+                                        <span className="font-semibold text-zinc-700 dark:text-zinc-300 w-2/3">{item.subject}</span>
                                         <div className="flex items-center">
                                             <span className={`font-bold text-sm ${rating.color}`}>{rating.text}</span>
                                             <span className="font-mono text-lg w-12 text-right text-black dark:text-white">{item.score}</span>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{description}</p> {/* Smaller font, less margin */}
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{description}</p>
                                 </div>
                             );
                         })}
+                    </div>
+                </div>
+
+                {/* Collapsible Commit List */}
+                <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isCommitListOpen ? 'max-h-[400px] mt-8' : 'max-h-0'}`}>
+                    <h4 className="text-lg font-bold text-black dark:text-white mb-4">분석된 커밋 목록</h4>
+                    <div className="space-y-2 h-96 overflow-y-auto rounded-lg border bg-zinc-50 dark:bg-zinc-900/50 p-3 shadow-inner">
+                        {qualityData.commits && qualityData.commits.length > 0 ? (
+                            qualityData.commits.map(commit => (
+                                <a href={commit.html_url} key={commit.sha} target="_blank" rel="noopener noreferrer" className="block p-2.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+                                    <p className="truncate font-mono text-sm text-blue-600 dark:text-blue-400">{commit.message.split('\n')[0]}</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                                        {new Date(commit.date).toLocaleString('ko-KR')}
+                                    </p>
+                                </a>
+                            ))
+                        ) : (
+                            <div className="flex items-center justify-center h-full">
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                    분석된 커밋이 없습니다.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

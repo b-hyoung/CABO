@@ -50,13 +50,20 @@ export interface DetailedMetrics {
   hotfixCommitsCount: number;
 }
 
+export interface SimpleCommit {
+  sha: string;
+  message: string;
+  date: string;
+  html_url: string;
+}
+
 export interface CodeQualityData {
-  overallRating: 'Clean' | 'Mixed' | 'Messy';
   confidence: number;
-  periodDays: number; // Added as per spec
+  periodDays: number;
   scores: QualityScore[];
   codeSmells: CodeSmell[];
   detailedMetrics: DetailedMetrics;
+  commits?: SimpleCommit[];
 }
 
 export interface DeveloperData {
@@ -91,4 +98,37 @@ export const personaTypes: { [key: string]: string } = {
   "분석 실패": "데이터를 분석하는 데 실패했습니다.",
 };
 
-export type Tab = 'activity' | 'quality' | 'communication';
+export type RepoClassification = 'Team' | 'Solo';
+
+export interface CollaborationMetrics {
+  // PR 작성 스타일
+  prOpenedCount: number | 'N/A';
+  prMergedCount: number | 'N/A';
+  prSizeLinesMedian: number | 'N/A';
+  prSizeFilesMedian: number | 'N/A';
+  prLeadTimeMedianHours: number | 'N/A';
+
+  // 리뷰 기여도
+  reviewedPrCount: number | 'N/A';
+  reviewCommentCount: number | 'N/A';
+
+  // 이슈 참여도 (Optional)
+  issuesOpenedCount?: number | 'N/A';
+  issuesClosedCount?: number | 'N/A';
+  issueCommentCount?: number | 'N/A';
+
+  // 보조 배지
+  coAuthoredByDetected?: boolean;
+}
+
+export interface CollaborationRepoAnalysis {
+  repoName: string;
+  classification: RepoClassification;
+  metrics: CollaborationMetrics;
+}
+
+export interface CollaborationData {
+  totalTeamRepos: number;
+  totalSoloRepos: number;
+  repoAnalyses: CollaborationRepoAnalysis[];
+}
