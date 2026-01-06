@@ -3,9 +3,10 @@ import { DeveloperData } from '@/app/types';
 
 interface Props {
     developer: DeveloperData;
+    traits: string[];
 }
 
-const ProfileCard = ({ developer }: Props) => {
+const ProfileCard = ({ developer, traits }: Props) => {
     return (
         <section className="w-full rounded-2xl bg-gradient-to-br from-white to-zinc-100 dark:from-zinc-800 dark:to-zinc-900 p-8 shadow-lg transition-all duration-300 hover:shadow-xl">
             <div className="grid md:grid-cols-3 gap-8 items-center">
@@ -20,7 +21,17 @@ const ProfileCard = ({ developer }: Props) => {
                         <div className={`mt-4 rounded-full px-4 py-1.5 text-lg font-bold ${developer.tierColor} bg-blue-100 dark:bg-blue-900/50`}>
                             {developer.tier} Tier
                         </div>
-                        <p className="mt-2 text-center sm:text-left text-zinc-600 dark:text-zinc-300">{developer.tierDescription}</p>
+                        <div className="mt-2 flex flex-wrap gap-2 justify-center sm:justify-start">
+                            {traits.length > 0 ? (
+                                traits.map(trait => (
+                                    <span key={trait} className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-200 dark:bg-zinc-700 rounded-full px-3 py-1">
+                                        {trait}
+                                    </span>
+                                ))
+                            ) : (
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400">분석 중...</p>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <div className="md:col-span-1 flex flex-col gap-4">
