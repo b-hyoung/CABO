@@ -12,6 +12,7 @@ import CollaborationStyleTab from "./components/CollaborationStyleTab";
 import ProfileCard from "./components/ProfileCard";
 import Badges from "./components/Badges";
 import AdditionalStats from "./components/AdditionalStats";
+import ShareModal from './components/ShareModal';
 
 // --- Main Page Component ---
 export default function MyCaboPage() {
@@ -36,6 +37,17 @@ export default function MyCaboPage() {
 
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('activity');
+
+  // State for Share Modal
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState('');
+
+  useEffect(() => {
+    // Ensure window is defined (runs only on client)
+    if (typeof window !== 'undefined') {
+      setCurrentUrl(window.location.href);
+    }
+  }, []);
 
   // --- Caching and Data Fetching ---
   const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -82,10 +94,6 @@ export default function MyCaboPage() {
       setIsLoading(false);
     }
   }, [username, method]);
-
-  useEffect(() => {
-    getDeveloperData();
-  }, [getDeveloperData]);
   
   const fetchQualityData = useCallback(async () => {
     if (!username || qualityData) return;
@@ -126,7 +134,7 @@ export default function MyCaboPage() {
         const { data, timestamp } = JSON.parse(cachedItem);
         if (Date.now() - timestamp < CACHE_DURATION) {
           setCollaborationData(data);
-setIsCollaborationLoading(false);
+          setIsCollaborationLoading(false);
           return;
         }
       }
@@ -145,13 +153,22 @@ setIsCollaborationLoading(false);
     }
   }, [username, collaborationData]);
 
-  const handleTabClick = (tab: Tab) => {
-    setActiveTab(tab);
-    if (tab === 'quality') {
+  // Initial data fetch
+  useEffect(() => {
+    getDeveloperData();
+  }, [getDeveloperData]);
+
+  // --- Prefetching for other tabs ---
+  useEffect(() => {
+    if (developer) {
+      // Once the main data is loaded, prefetch the data for other tabs in the background
       fetchQualityData();
-    } else if (tab === 'communication') {
       fetchCollaborationData();
     }
+  }, [developer, fetchQualityData, fetchCollaborationData]);
+
+  const handleTabClick = (tab: Tab) => {
+    setActiveTab(tab);
   };
 
 
@@ -187,15 +204,18 @@ setIsCollaborationLoading(false);
 
   return (
     <div className="flex min-h-screen items-stretch justify-center bg-zinc-50 font-sans dark:bg-black py-12 sm:py-16">
-      <main className="flex w-full max-w-4xl flex-col items-center gap-10 px-4 sm:px-8 flex-grow">
-        <header className="w-full flex justify-between items-center">
+      <main id="report-content" className="flex w-full max-w-4xl flex-col items-center gap-10 px-4 sm:px-8 flex-grow">
+        <header className="w-full flex justify-between items-center no-print">
           <Link href="/" className="rounded-full px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition-colors hover:bg-zinc-200 dark:hover:bg-zinc-800">
             &larr; 다시 분석하기
           </Link>
           <h1 className="hidden sm:block text-2xl font-bold text-black dark:text-zinc-50">
             개발자 분석 리포트
           </h1>
-          <button className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
+          <button 
+            onClick={() => setIsShareModalOpen(true)}
+            className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
             리포트 공유하기
           </button>
         </header>
@@ -203,7 +223,7 @@ setIsCollaborationLoading(false);
         <ProfileCard developer={developer} />
 
         <section className="w-full">
-          <div className="mb-4 border-b border-zinc-200 dark:border-zinc-700">
+          <div className="mb-4 border-b border-zinc-200 dark:border-zinc-700 no-print">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
               <button
                 onClick={() => handleTabClick('activity')}
@@ -263,7 +283,7 @@ setIsCollaborationLoading(false);
           </div>
         </section>
 
-        <footer className="w-full text-center mt-auto pt-8 border-t border-zinc-200 dark:border-zinc-700">
+        <footer className="w-full text-center mt-auto pt-8 border-t border-zinc-200 dark:border-zinc-700 no-print">
           <p className="text-md text-zinc-500 dark:text-zinc-400">
             이 분석은 AI에 의해 생성되었으며, 참고용으로만 활용해주세요.
           </p>
@@ -272,6 +292,13 @@ setIsCollaborationLoading(false);
           </p>
         </footer>
       </main>
+
+      <ShareModal 
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        reportUrl={currentUrl}
+        username={username || 'user'}
+      />
     </div>
   );
 }
