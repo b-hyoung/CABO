@@ -13,6 +13,8 @@ import ProfileCard from "./components/ProfileCard";
 import Badges from "./components/Badges";
 import AdditionalStats from "./components/AdditionalStats";
 import ShareModal from './components/ShareModal';
+import { getPrStyleProfile } from './components/collaborationUtils';
+
 
 // --- Main Page Component ---
 export default function MyCaboPage() {
@@ -38,9 +40,11 @@ export default function MyCaboPage() {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('activity');
 
-  // State for Share Modal
+  // State for Share Modal & Dynamic Description
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [currentUrl, setCurrentUrl] = useState('');
+  const [dynamicDescription, setDynamicDescription] = useState('종합 분석 데이터를 불러오는 중입니다...');
+
 
   useEffect(() => {
     // Ensure window is defined (runs only on client)
@@ -167,6 +171,51 @@ export default function MyCaboPage() {
     }
   }, [developer, fetchQualityData, fetchCollaborationData]);
 
+  // --- Dynamic Description Generation ---
+  useEffect(() => {
+    if (developer && qualityData && collaborationData) {
+      const generateDynamicDescription = () => {
+        const activityTrait = developer.stats.consistency.split(' ')[0] || '';
+
+        const topQualityScore = qualityData.scores.reduce(
+          (max, score) => (score.score > max.score ? score : max),
+          qualityData.scores[0] || { subject: '', score: 0 }
+        );
+        let qualityTrait = '';
+        if (topQualityScore.score > 75) {
+             switch (topQualityScore.subject) {
+                case '작업분할': qualityTrait = '작업을 잘게 나누는'; break;
+                case '의미도': qualityTrait = '의도가 명확한 커밋을 작성하는'; break;
+                case '구조화': qualityTrait = '체계적으로 코드를 관리하는'; break;
+                case '리듬': qualityTrait = '꾸준한'; break;
+                default: qualityTrait = '체계적인'; break;
+            }
+        }
+
+        const teamRepoAnalysis = collaborationData.repoAnalyses.find(r => r.classification === 'Team');
+        let collabPhrase = '';
+        if (teamRepoAnalysis) {
+            const collabProfile = getPrStyleProfile(teamRepoAnalysis.metrics);
+            collabPhrase = collabProfile.summary;
+        } else {
+            collabPhrase = '주로 독립적으로 작업하는 개발자입니다.';
+        }
+        
+        let finalDescription = '';
+        if (activityTrait && qualityTrait) {
+            finalDescription = `${activityTrait} 성향과 ${qualityTrait} 습관을 지녔으며, ${collabPhrase}`;
+        } else if (activityTrait) {
+            finalDescription = `${activityTrait} 성향을 가졌으며, ${collabPhrase}`;
+        } else {
+            finalDescription = collabPhrase;
+        }
+        setDynamicDescription(finalDescription);
+      };
+
+      generateDynamicDescription();
+    }
+  }, [developer, qualityData, collaborationData]);
+
   const handleTabClick = (tab: Tab) => {
     setActiveTab(tab);
   };
@@ -220,7 +269,7 @@ export default function MyCaboPage() {
           </button>
         </header>
 
-        <ProfileCard developer={developer} />
+        <ProfileCard developer={{...developer, tierDescription: dynamicDescription}} />
 
         <section className="w-full">
           <div className="mb-4 border-b border-zinc-200 dark:border-zinc-700 no-print">
